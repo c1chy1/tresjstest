@@ -60,8 +60,8 @@ onMounted(() => {
   scene.add(fillLight)
 
   const loader = new THREE.TextureLoader()
-  const textureA = loader.load('/img/wyjebongo.jpg')
-  const textureB = loader.load('/img/wiosna.jpg')
+  const textureA = loader.load('/img/example.jpg')
+  const textureB = loader.load('/img/example2.jpg')
 
   const materials = [
     new THREE.MeshLambertMaterial({ map: textureA, color: 0xffffff, flatShading: true }),
