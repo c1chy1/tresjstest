@@ -27,6 +27,8 @@ let lastX = 0
 let lastY = 0
 let velocityX = 0
 let velocityY = 0
+let pendingDeltaX = 0
+let pendingDeltaY = 0
 
 let handlePointerDown
 let handlePointerMove
@@ -144,8 +146,9 @@ onMounted(() => {
   camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000)
   camera.position.set(0, 0, camZ)
 
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+  renderer = new THREE.WebGLRenderer({ antialias: !isMobile, alpha: false })
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2))
   renderer.setSize(w, h)
   renderer.setClearColor(0xfdf6e3)
   renderer.domElement.style.touchAction = 'none'
@@ -225,20 +228,19 @@ onMounted(() => {
   function animate() {
     animationFrameId = requestAnimationFrame(animate)
 
-    if (!isDragging && !isSnapping) {
+    if (isDragging) {
+      if (pendingDeltaX !== 0 || pendingDeltaY !== 0) {
+        rotateWorldSpace(cube, pendingDeltaX, pendingDeltaY)
+        pendingDeltaX = 0
+        pendingDeltaY = 0
+      }
+    } else if (!isSnapping) {
       rotateWorldSpace(cube, velocityX, velocityY)
-
       velocityX *= 0.92
       velocityY *= 0.92
-
       if (Math.abs(velocityX) < 0.0001) velocityX = 0
       if (Math.abs(velocityY) < 0.0001) velocityY = 0
     }
-
-    const time = Date.now() * 0.0005
-    camera.position.x = Math.sin(time) * 0.12
-    camera.position.y = Math.cos(time * 0.8) * 0.08
-    camera.lookAt(0, 0, 0)
 
     renderer.render(scene, camera)
   }
@@ -252,6 +254,8 @@ onMounted(() => {
     isDragging = true
     velocityX = 0
     velocityY = 0
+    pendingDeltaX = 0
+    pendingDeltaY = 0
     lastX = event.clientX
     lastY = event.clientY
   }
@@ -259,14 +263,14 @@ onMounted(() => {
   handlePointerMove = (event) => {
     if (!isDragging || event.pointerId !== activePointerId) return
 
-    const deltaX = event.clientX - lastX
-    const deltaY = event.clientY - lastY
     const sensitivity = 0.005
+    const deltaX = (event.clientX - lastX) * sensitivity
+    const deltaY = (event.clientY - lastY) * sensitivity
 
-    velocityX = deltaX * sensitivity
-    velocityY = deltaY * sensitivity
-
-    rotateWorldSpace(cube, velocityX, velocityY)
+    pendingDeltaX += deltaX
+    pendingDeltaY += deltaY
+    velocityX = deltaX
+    velocityY = deltaY
 
     lastX = event.clientX
     lastY = event.clientY
