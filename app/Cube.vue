@@ -1,12 +1,5 @@
 <template>
-  <div ref="container" class="cube-container">
-    <div class="cloud-layer">
-      <div class="cloud cloud-1" :class="{ puff: cloudPuff }"></div>
-      <div class="cloud cloud-2" :class="{ puff: cloudPuff }"></div>
-      <div class="cloud cloud-3" :class="{ puff: cloudPuff }"></div>
-      <div class="cloud cloud-4" :class="{ puff: cloudPuff }"></div>
-    </div>
-  </div>
+  <div ref="container" class="cube-container"></div>
 </template>
 
 <script setup>
@@ -14,11 +7,10 @@ import * as THREE from 'three'
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
-import { onMounted, onUnmounted, ref, nextTick } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import gsap from 'gsap'
 
 const container = ref(null)
-const cloudPuff = ref(false)
 
 let cube
 let renderer
@@ -30,7 +22,6 @@ let animationFrameId = 0
 let isDragging = false
 let isSnapping = false
 let activePointerId = null
-let cloudTimeout = null
 
 let lastX = 0
 let lastY = 0
@@ -137,22 +128,6 @@ function correctTextureRoll() {
     })
   })
 
-  if (Math.abs(rollAngle) > 0.01) {
-    gsap.timeline()
-      .to(cube.scale, { x: 1.1, y: 0.88, z: 1.1, duration: 0.1, ease: 'power2.in' })
-      .to(cube.scale, { x: 1, y: 1, z: 1, duration: 0.65, ease: 'elastic.out(1.3, 0.4)' })
-
-    showCloudEffect()
-  }
-}
-
-function showCloudEffect() {
-  cloudPuff.value = false
-  clearTimeout(cloudTimeout)
-  nextTick(() => {
-    cloudPuff.value = true
-    cloudTimeout = setTimeout(() => { cloudPuff.value = false }, 1000)
-  })
 }
 
 onMounted(() => {
@@ -332,7 +307,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   cancelAnimationFrame(animationFrameId)
-  clearTimeout(cloudTimeout)
 
   if (renderer?.domElement && handlePointerDown) {
     renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
@@ -369,74 +343,5 @@ onUnmounted(() => {
   height: 100dvh;
   overflow: hidden;
   touch-action: none;
-  position: relative;
-}
-
-.cloud-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 10;
-}
-
-.cloud {
-  position: absolute;
-  background: #fff;
-  border: 3px solid #111;
-  border-radius: 60px;
-  opacity: 0;
-}
-
-.cloud::before,
-.cloud::after {
-  content: '';
-  position: absolute;
-  background: #fff;
-  border: 3px solid #111;
-  border-radius: 50%;
-}
-
-.cloud-1 {
-  width: 110px; height: 46px;
-  top: calc(50% - 90px); left: calc(50% - 160px);
-}
-.cloud-1::before { width: 56px; height: 56px; top: -32px; left: 10px; }
-.cloud-1::after  { width: 40px; height: 40px; top: -22px; left: 52px; }
-
-.cloud-2 {
-  width: 80px; height: 34px;
-  top: calc(50% - 110px); left: calc(50% + 60px);
-}
-.cloud-2::before { width: 40px; height: 40px; top: -24px; left: 8px; }
-.cloud-2::after  { width: 30px; height: 30px; top: -16px; left: 40px; }
-
-
-.cloud-3 {
-  width: 100px; height: 42px;
-  top: calc(50% + 60px); left: calc(50% + 50px);
-}
-.cloud-3::before { width: 50px; height: 50px; top: -28px; left: 12px; }
-.cloud-3::after  { width: 36px; height: 36px; top: -20px; left: 50px; }
-
-
-.cloud-4 {
-  width: 70px; height: 30px;
-  top: calc(50% + 50px); left: calc(50% - 140px);
-}
-.cloud-4::before { width: 36px; height: 36px; top: -20px; left: 6px; }
-.cloud-4::after  { width: 26px; height: 26px; top: -14px; left: 34px; }
-
-.puff {
-  animation: cloudPuff 0.9s ease-out forwards;
-}
-.cloud-2.puff { animation-delay: 0.07s; }
-.cloud-3.puff { animation-delay: 0.12s; }
-.cloud-4.puff { animation-delay: 0.05s; }
-
-@keyframes cloudPuff {
-  0%   { opacity: 0;    transform: scale(0.3) translateY(10px); }
-  35%  { opacity: 1;    transform: scale(1.05) translateY(-4px); }
-  65%  { opacity: 0.85; transform: scale(1);   }
-  100% { opacity: 0;    transform: scale(1.3) translateY(-8px); }
 }
 </style>
