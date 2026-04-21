@@ -23,7 +23,8 @@ const selectedShape = ref<"cube" | "heart">("cube");
 <style scoped>
 .app-shell {
   position: relative;
-  min-height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: #fdf6e3;
 }
 
@@ -56,8 +57,9 @@ const selectedShape = ref<"cube" | "heart">("cube");
 }
 
 :global(html, body, #__nuxt) {
-  min-height: 100%;
+  height: 100%;
   margin: 0;
+  overflow: hidden;
   background: #fdf6e3;
 }
 </style>
