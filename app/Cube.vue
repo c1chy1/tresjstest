@@ -15,9 +15,12 @@ const container = ref(null)
 let cube
 let renderer
 let camera
+let scene
+let fog
 let animationFrameId = 0
 let isDragging = false
 let isSnapping = false
+let activePointerId = null
 
 let lastX = 0
 let lastY = 0
@@ -30,6 +33,20 @@ let handlePointerUp
 let handleResize
 let outlineLineMat
 
+function getViewSize() {
+  const vv = window.visualViewport
+  return {
+    w: vv ? vv.width : window.innerWidth,
+    h: vv ? vv.height : window.innerHeight,
+  }
+}
+
+function computeCameraZ(aspect) {
+  if (aspect >= 1) return 4
+  const halfFovRad = THREE.MathUtils.degToRad(75 / 2)
+  return Math.max(4, (3 * 1.5) / (2 * Math.tan(halfFovRad) * aspect))
+}
+
 function normalizeAngle(angle) {
   const twoPi = Math.PI * 2
   angle %= twoPi
@@ -41,16 +58,22 @@ function normalizeAngle(angle) {
 onMounted(() => {
   if (!process.client || !container.value) return
 
-  const scene = new THREE.Scene()
-  scene.fog = new THREE.Fog(0xfdf6e3, 5, 10)
+  const { w, h } = getViewSize()
+  const aspect = w / h
+  const camZ = computeCameraZ(aspect)
 
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-  camera.position.set(0, 0, 4)
+  scene = new THREE.Scene()
+  fog = new THREE.Fog(0xfdf6e3, camZ + 1, camZ + 7)
+  scene.fog = fog
+
+  camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000)
+  camera.position.set(0, 0, camZ)
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  renderer.setSize(window.innerWidth, window.innerHeight)
+  renderer.setSize(w, h)
   renderer.setClearColor(0xfdf6e3)
+  renderer.domElement.style.touchAction = 'none'
   container.value.appendChild(renderer.domElement)
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.85))
@@ -86,7 +109,7 @@ onMounted(() => {
   outlineLineMat = new LineMaterial({
     color: 0x000000,
     linewidth: 5,
-    resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+    resolution: new THREE.Vector2(w, h),
   })
   const outlineLines = new LineSegments2(lineGeo, outlineLineMat)
   cube.add(outlineLines)
@@ -135,6 +158,8 @@ onMounted(() => {
   }
 
   handlePointerDown = (event) => {
+    if (activePointerId !== null) return
+    activePointerId = event.pointerId
     gsap.killTweensOf(cube.rotation)
     isSnapping = false
     isDragging = true
@@ -145,7 +170,7 @@ onMounted(() => {
   }
 
   handlePointerMove = (event) => {
-    if (!isDragging) return
+    if (!isDragging || event.pointerId !== activePointerId) return
 
     const deltaX = event.clientX - lastX
     const deltaY = event.clientY - lastY
@@ -164,17 +189,27 @@ onMounted(() => {
     lastY = event.clientY
   }
 
-  handlePointerUp = () => {
-    if (!isDragging) return
+  handlePointerUp = (event) => {
+    if (!isDragging || event.pointerId !== activePointerId) return
     isDragging = false
+    activePointerId = null
     snapToFace()
   }
 
   handleResize = () => {
-    camera.aspect = window.innerWidth / window.innerHeight
+    const { w, h } = getViewSize()
+    const newAspect = w / h
+    const newCamZ = computeCameraZ(newAspect)
+
+    camera.aspect = newAspect
+    camera.position.z = newCamZ
     camera.updateProjectionMatrix()
-    renderer.setSize(window.innerWidth, window.innerHeight)
-    outlineLineMat?.resolution.set(window.innerWidth, window.innerHeight)
+
+    fog.near = newCamZ + 1
+    fog.far = newCamZ + 7
+
+    renderer.setSize(w, h)
+    outlineLineMat?.resolution.set(w, h)
   }
 
   renderer.domElement.addEventListener('pointerdown', handlePointerDown)
@@ -182,6 +217,7 @@ onMounted(() => {
   window.addEventListener('pointerup', handlePointerUp)
   window.addEventListener('pointercancel', handlePointerUp)
   window.addEventListener('resize', handleResize)
+  window.visualViewport?.addEventListener('resize', handleResize)
 
   animate()
 })
@@ -200,7 +236,10 @@ onUnmounted(() => {
     window.removeEventListener('pointercancel', handlePointerUp)
   }
 
-  if (handleResize) window.removeEventListener('resize', handleResize)
+  if (handleResize) {
+    window.removeEventListener('resize', handleResize)
+    window.visualViewport?.removeEventListener('resize', handleResize)
+  }
 
   if (Array.isArray(cube?.material)) {
     cube.material.forEach((material) => material.dispose())
@@ -218,7 +257,8 @@ onUnmounted(() => {
 <style>
 .cube-container {
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
+  touch-action: none;
 }
 </style>
