@@ -135,34 +135,36 @@ function correctTextureRoll() {
 onMounted(() => {
   if (!process.client || !container.value) return
 
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
   const { w, h } = getViewSize()
   const aspect = w / h
   const camZ = computeCameraZ(aspect)
 
   scene = new THREE.Scene()
-  fog = new THREE.Fog(0xfdf6e3, camZ + 1, camZ + 7)
-  scene.fog = fog
+  if (!isMobile) {
+    fog = new THREE.Fog(0xfdf6e3, camZ + 1, camZ + 7)
+    scene.fog = fog
+  }
 
   camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000)
   camera.position.set(0, 0, camZ)
 
-  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
-  renderer = new THREE.WebGLRenderer({ antialias: !isMobile, alpha: false })
+  renderer = new THREE.WebGLRenderer({ antialias: !isMobile, alpha: false, powerPreference: 'high-performance' })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2))
   renderer.setSize(w, h)
   renderer.setClearColor(0xfdf6e3)
   renderer.domElement.style.touchAction = 'none'
   container.value.appendChild(renderer.domElement)
 
-  scene.add(new THREE.AmbientLight(0xffffff, 1.85))
-
-  const keyLight = new THREE.DirectionalLight(0xfff4dd, 1.8)
-  keyLight.position.set(3, 4, 5)
-  scene.add(keyLight)
-
-  const fillLight = new THREE.DirectionalLight(0xffe1d6, 0.9)
-  fillLight.position.set(-3, -1, 2)
-  scene.add(fillLight)
+  if (!isMobile) {
+    scene.add(new THREE.AmbientLight(0xffffff, 1.85))
+    const keyLight = new THREE.DirectionalLight(0xfff4dd, 1.8)
+    keyLight.position.set(3, 4, 5)
+    scene.add(keyLight)
+    const fillLight = new THREE.DirectionalLight(0xffe1d6, 0.9)
+    fillLight.position.set(-3, -1, 2)
+    scene.add(fillLight)
+  }
 
   const loader = new THREE.TextureLoader()
   const imgPaths = [
@@ -180,7 +182,9 @@ onMounted(() => {
   })
 
   const materials = textures.map(tex =>
-    new THREE.MeshLambertMaterial({ map: tex, color: 0xffffff, flatShading: true })
+    isMobile
+      ? new THREE.MeshBasicMaterial({ map: tex })
+      : new THREE.MeshLambertMaterial({ map: tex, color: 0xffffff, flatShading: true })
   )
 
   const orientations = buildOrientations()
@@ -292,8 +296,10 @@ onMounted(() => {
     camera.position.z = newCamZ
     camera.updateProjectionMatrix()
 
-    fog.near = newCamZ + 1
-    fog.far = newCamZ + 7
+    if (fog) {
+      fog.near = newCamZ + 1
+      fog.far = newCamZ + 7
+    }
 
     renderer.setSize(w, h)
     outlineLineMat?.resolution.set(w, h)
