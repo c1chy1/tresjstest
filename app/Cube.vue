@@ -25,8 +25,7 @@ let renderer
 let camera
 let scene
 let fog
-let textureA
-let textureB
+let textures = []
 let animationFrameId = 0
 let isDragging = false
 let isSnapping = false
@@ -95,18 +94,34 @@ function rotateWorldSpace(mesh, angleY, angleX) {
   mesh.quaternion.premultiply(_tmpQ)
 }
 
-// Sprawdza o ile stopni tekstury są "przekręcone" po snapie
-// i animuje TYLKO tekstury z powrotem do pionu — kostka się nie rusza
-function correctTextureRoll() {
-  const localY = new THREE.Vector3(0, 1, 0).applyQuaternion(cube.quaternion)
-  const rawAngle = Math.atan2(localY.x, localY.y)
-  const rollAngle = Math.round(rawAngle / (Math.PI / 2)) * (Math.PI / 2)
+// Dla każdej ścianki BoxGeometry — kierunek V (góra tekstury) w lokalnej przestrzeni kostki
+const _FACE_DATA = [
+  { normal: new THREE.Vector3( 1, 0, 0), vDir: new THREE.Vector3(0, 1,  0) }, // +X
+  { normal: new THREE.Vector3(-1, 0, 0), vDir: new THREE.Vector3(0, 1,  0) }, // -X
+  { normal: new THREE.Vector3( 0, 1, 0), vDir: new THREE.Vector3(0, 0, -1) }, // +Y góra
+  { normal: new THREE.Vector3( 0,-1, 0), vDir: new THREE.Vector3(0, 0,  1) }, // -Y dół
+  { normal: new THREE.Vector3( 0, 0, 1), vDir: new THREE.Vector3(0, 1,  0) }, // +Z przód
+  { normal: new THREE.Vector3( 0, 0,-1), vDir: new THREE.Vector3(0, 1,  0) }, // -Z tył
+]
 
-  // Cel: obrót tekstury kompensuje roll kostki
+function correctTextureRoll() {
+  // Znajdź ściankę zwróconą ku kamerze (kamera patrzy wzdłuż +Z)
+  let maxDot = -Infinity
+  let visibleVDir = new THREE.Vector3(0, 1, 0)
+  for (const { normal, vDir } of _FACE_DATA) {
+    const dot = normal.clone().applyQuaternion(cube.quaternion).z
+    if (dot > maxDot) {
+      maxDot = dot
+      visibleVDir = vDir.clone().applyQuaternion(cube.quaternion)
+    }
+  }
+
+  // Kąt rollu widocznej ścianki w płaszczyźnie XY
+  const rawAngle = Math.atan2(visibleVDir.x, visibleVDir.y)
+  const rollAngle = Math.round(rawAngle / (Math.PI / 2)) * (Math.PI / 2)
   const target = rollAngle
 
-  ;[textureA, textureB].forEach(tex => {
-    // Najkrótsza droga
+  textures.forEach(tex => {
     let cur = tex.rotation
     while (cur - target > Math.PI) cur -= 2 * Math.PI
     while (target - cur > Math.PI) cur += 2 * Math.PI
@@ -123,7 +138,6 @@ function correctTextureRoll() {
   })
 
   if (Math.abs(rollAngle) > 0.01) {
-    // Cartoon squash & stretch podczas korekcji
     gsap.timeline()
       .to(cube.scale, { x: 1.1, y: 0.88, z: 1.1, duration: 0.1, ease: 'power2.in' })
       .to(cube.scale, { x: 1, y: 1, z: 1, duration: 0.65, ease: 'elastic.out(1.3, 0.4)' })
@@ -173,19 +187,23 @@ onMounted(() => {
   scene.add(fillLight)
 
   const loader = new THREE.TextureLoader()
-  textureA = loader.load('/img/example.jpg')
-  textureB = loader.load('/img/example2.jpg')
-  textureA.center.set(0.5, 0.5)
-  textureB.center.set(0.5, 0.5)
-
-  const materials = [
-    new THREE.MeshLambertMaterial({ map: textureA, color: 0xffffff, flatShading: true }),
-    new THREE.MeshLambertMaterial({ map: textureB, color: 0xffffff, flatShading: true }),
-    new THREE.MeshLambertMaterial({ map: textureA, color: 0xffffff, flatShading: true }),
-    new THREE.MeshLambertMaterial({ map: textureB, color: 0xffffff, flatShading: true }),
-    new THREE.MeshLambertMaterial({ map: textureA, color: 0xffffff, flatShading: true }),
-    new THREE.MeshLambertMaterial({ map: textureB, color: 0xffffff, flatShading: true }),
+  const imgPaths = [
+    '/img/narzekanie.jpg',
+    '/img/wiosna2.jpg',
+    '/img/wiosna.jpg',
+    '/img/niepotrzebnie.jpg',
+    '/img/cyrk.jpg',
+    '/img/wyjebongo.jpg',
   ]
+  textures = imgPaths.map(path => {
+    const tex = loader.load(path)
+    tex.center.set(0.5, 0.5)
+    return tex
+  })
+
+  const materials = textures.map(tex =>
+    new THREE.MeshLambertMaterial({ map: tex, color: 0xffffff, flatShading: true })
+  )
 
   const orientations = buildOrientations()
 
@@ -354,7 +372,6 @@ onUnmounted(() => {
   position: relative;
 }
 
-/* ── Cartoon clouds overlay ── */
 .cloud-layer {
   position: absolute;
   inset: 0;
@@ -379,7 +396,6 @@ onUnmounted(() => {
   border-radius: 50%;
 }
 
-/* Duża chmurka — lewa góra */
 .cloud-1 {
   width: 110px; height: 46px;
   top: calc(50% - 90px); left: calc(50% - 160px);
@@ -387,7 +403,6 @@ onUnmounted(() => {
 .cloud-1::before { width: 56px; height: 56px; top: -32px; left: 10px; }
 .cloud-1::after  { width: 40px; height: 40px; top: -22px; left: 52px; }
 
-/* Mała chmurka — prawa góra */
 .cloud-2 {
   width: 80px; height: 34px;
   top: calc(50% - 110px); left: calc(50% + 60px);
@@ -395,7 +410,7 @@ onUnmounted(() => {
 .cloud-2::before { width: 40px; height: 40px; top: -24px; left: 8px; }
 .cloud-2::after  { width: 30px; height: 30px; top: -16px; left: 40px; }
 
-/* Duża chmurka — prawy dół */
+
 .cloud-3 {
   width: 100px; height: 42px;
   top: calc(50% + 60px); left: calc(50% + 50px);
@@ -403,7 +418,7 @@ onUnmounted(() => {
 .cloud-3::before { width: 50px; height: 50px; top: -28px; left: 12px; }
 .cloud-3::after  { width: 36px; height: 36px; top: -20px; left: 50px; }
 
-/* Mała chmurka — lewy dół */
+
 .cloud-4 {
   width: 70px; height: 30px;
   top: calc(50% + 50px); left: calc(50% - 140px);
@@ -411,7 +426,6 @@ onUnmounted(() => {
 .cloud-4::before { width: 36px; height: 36px; top: -20px; left: 6px; }
 .cloud-4::after  { width: 26px; height: 26px; top: -14px; left: 34px; }
 
-/* Animacja: puff in & out z lekkim bounce */
 .puff {
   animation: cloudPuff 0.9s ease-out forwards;
 }
