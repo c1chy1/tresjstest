@@ -6,8 +6,8 @@ export default defineNuxtConfig({
   vite: {
     optimizeDeps: {
       include: [
-        'three',
         '@tresjs/cientos',
+        'gsap',
       ]
     }
   }
