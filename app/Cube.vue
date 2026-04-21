@@ -4,6 +4,9 @@
 
 <script setup>
 import * as THREE from 'three'
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js'
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js'
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import { onMounted, onUnmounted, ref } from 'vue'
 import gsap from 'gsap'
 
@@ -25,6 +28,7 @@ let handlePointerDown
 let handlePointerMove
 let handlePointerUp
 let handleResize
+let outlineLineMat
 
 function normalizeAngle(angle) {
   const twoPi = Math.PI * 2
@@ -76,6 +80,17 @@ onMounted(() => {
   cube.rotation.set(-0.18, 0.55, 0)
   scene.add(cube)
 
+  const edgesGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(3, 3, 3))
+  const lineGeo = new LineSegmentsGeometry().fromEdgesGeometry(edgesGeo)
+  edgesGeo.dispose()
+  outlineLineMat = new LineMaterial({
+    color: 0x000000,
+    linewidth: 5,
+    resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+  })
+  const outlineLines = new LineSegments2(lineGeo, outlineLineMat)
+  cube.add(outlineLines)
+
   function snapToFace() {
     const step = Math.PI / 2
     const targetY = Math.round(normalizeAngle(cube.rotation.y) / step) * step
@@ -120,7 +135,11 @@ onMounted(() => {
   }
 
   handlePointerDown = (event) => {
+    gsap.killTweensOf(cube.rotation)
+    isSnapping = false
     isDragging = true
+    velocityX = 0
+    velocityY = 0
     lastX = event.clientX
     lastY = event.clientY
   }
@@ -155,6 +174,7 @@ onMounted(() => {
     camera.aspect = window.innerWidth / window.innerHeight
     camera.updateProjectionMatrix()
     renderer.setSize(window.innerWidth, window.innerHeight)
+    outlineLineMat?.resolution.set(window.innerWidth, window.innerHeight)
   }
 
   renderer.domElement.addEventListener('pointerdown', handlePointerDown)
@@ -185,6 +205,10 @@ onUnmounted(() => {
   if (Array.isArray(cube?.material)) {
     cube.material.forEach((material) => material.dispose())
   }
+
+  const outlineChild = cube?.children?.[0]
+  outlineChild?.geometry?.dispose()
+  outlineLineMat?.dispose()
 
   cube?.geometry?.dispose()
   renderer?.dispose()
