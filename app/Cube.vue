@@ -45,7 +45,7 @@ function getViewSize() {
 function computeCameraZ(aspect) {
   if (aspect >= 1) return 4
   const halfFovRad = THREE.MathUtils.degToRad(75 / 2)
-  return Math.max(4, (3 * 1.5) / (2 * Math.tan(halfFovRad) * aspect))
+  return Math.max(4, (3.5 * 1.5) / (2 * Math.tan(halfFovRad) * aspect))
 }
 
 // Stałe osie świata — bez alokacji co klatkę
