@@ -32,6 +32,7 @@ let handlePointerMove
 let handlePointerUp
 let handleResize
 let outlineLineMat
+let snapTween
 
 function getViewSize() {
   const vv = window.visualViewport
@@ -47,12 +48,42 @@ function computeCameraZ(aspect) {
   return Math.max(4, (3 * 1.5) / (2 * Math.tan(halfFovRad) * aspect))
 }
 
-function normalizeAngle(angle) {
-  const twoPi = Math.PI * 2
-  angle %= twoPi
-  if (angle > Math.PI) angle -= twoPi
-  if (angle < -Math.PI) angle += twoPi
-  return angle
+// Stałe osie świata — bez alokacji co klatkę
+const _WORLD_Y = new THREE.Vector3(0, 1, 0)
+const _WORLD_X = new THREE.Vector3(1, 0, 0)
+const _tmpQ = new THREE.Quaternion()
+
+// 24 unikalne orientacje kostki (6 ścian × 4 obroty)
+function buildOrientations() {
+  const list = []
+  for (let xi = 0; xi < 4; xi++) {
+    for (let yi = 0; yi < 4; yi++) {
+      for (let zi = 0; zi < 4; zi++) {
+        const q = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(xi * Math.PI / 2, yi * Math.PI / 2, zi * Math.PI / 2)
+        )
+        if (!list.some(o => Math.abs(o.dot(q)) > 0.9999)) list.push(q)
+      }
+    }
+  }
+  return list
+}
+
+function nearestOrientation(q, orientations) {
+  let best = orientations[0]
+  let bestDot = -1
+  for (const o of orientations) {
+    const d = Math.abs(q.dot(o))
+    if (d > bestDot) { bestDot = d; best = o }
+  }
+  return best
+}
+
+function rotateWorldSpace(mesh, angleY, angleX) {
+  _tmpQ.setFromAxisAngle(_WORLD_Y, angleY)
+  mesh.quaternion.premultiply(_tmpQ)
+  _tmpQ.setFromAxisAngle(_WORLD_X, angleX)
+  mesh.quaternion.premultiply(_tmpQ)
 }
 
 onMounted(() => {
@@ -99,6 +130,8 @@ onMounted(() => {
     new THREE.MeshLambertMaterial({ map: textureB, color: 0xffffff, flatShading: true }),
   ]
 
+  const orientations = buildOrientations()
+
   cube = new THREE.Mesh(new THREE.BoxGeometry(3, 3, 3), materials)
   cube.rotation.set(-0.18, 0.55, 0)
   scene.add(cube)
@@ -115,32 +148,34 @@ onMounted(() => {
   cube.add(outlineLines)
 
   function snapToFace() {
-    const step = Math.PI / 2
-    const targetY = Math.round(normalizeAngle(cube.rotation.y) / step) * step
-    const targetX = Math.round(normalizeAngle(cube.rotation.x) / step) * step
-
-    isSnapping = true
-
-    gsap.to(cube.rotation, {
-      x: targetX,
-      y: targetY,
-      duration: 0.6,
-      ease: 'power3.out',
-      onComplete: () => {
-        isSnapping = false
-      },
-    })
-
     velocityX = 0
     velocityY = 0
+    isSnapping = true
+
+    const target = nearestOrientation(cube.quaternion, orientations)
+    const start = cube.quaternion.clone()
+    const proxy = { t: 0 }
+
+    snapTween = gsap.to(proxy, {
+      t: 1,
+      duration: 0.6,
+      ease: 'power3.out',
+      onUpdate() {
+        cube.quaternion.slerpQuaternions(start, target, proxy.t)
+      },
+      onComplete() {
+        cube.quaternion.copy(target)
+        isSnapping = false
+        snapTween = null
+      },
+    })
   }
 
   function animate() {
     animationFrameId = requestAnimationFrame(animate)
 
     if (!isDragging && !isSnapping) {
-      cube.rotation.y += velocityX
-      cube.rotation.x += velocityY
+      rotateWorldSpace(cube, velocityX, velocityY)
 
       velocityX *= 0.92
       velocityY *= 0.92
@@ -160,7 +195,8 @@ onMounted(() => {
   handlePointerDown = (event) => {
     if (activePointerId !== null) return
     activePointerId = event.pointerId
-    gsap.killTweensOf(cube.rotation)
+    snapTween?.kill()
+    snapTween = null
     isSnapping = false
     isDragging = true
     velocityX = 0
@@ -179,11 +215,7 @@ onMounted(() => {
     velocityX = deltaX * sensitivity
     velocityY = deltaY * sensitivity
 
-    cube.rotation.y += velocityX
-    cube.rotation.x += velocityY
-
-    const maxX = Math.PI / 2 - 0.01
-    cube.rotation.x = Math.max(-maxX, Math.min(maxX, cube.rotation.x))
+    rotateWorldSpace(cube, velocityX, velocityY)
 
     lastX = event.clientX
     lastY = event.clientY
